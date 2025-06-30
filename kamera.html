@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kamera AR Audio Indonesia Otomatis</title>
+
+  <!-- A-Frame & AR.js -->
+  <script src="https://aframe.io/releases/1.2.0/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js/aframe/build/aframe-ar.min.js"></script>
+
+  <!-- Font & CSS -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      font-family: 'Poppins', sans-serif;
+      background-color: #000;
+    }
+    a-scene {
+      position: absolute;
+      top: 0; left: 0;
+      z-index: 0;
+    }
+    .instruction-note, .exit-home-button, .manipulation-buttons, .model-description-box {
+      animation: fadeIn 0.8s ease-out forwards;
+      opacity: 0;
+    }
+    .instruction-note {
+      position: absolute; top: 20px; right: 20px;
+      background: rgba(0,0,0,0.6); color: white;
+      padding: 12px 18px; border-radius: 10px;
+      font-size: 1.1em; font-weight: 600;
+      z-index: 1001; text-align: right;
+      backdrop-filter: blur(5px);
+      box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+      transform: translateX(20px);
+    }
+    .exit-home-button {
+      position: absolute; top: 20px; left: 20px;
+      background: #3498DB; color: white;
+      padding: 12px 20px; border-radius: 10px;
+      font-size: 1em; font-weight: 600;
+      cursor: pointer; z-index: 1001;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+      transform: translateX(-20px); border: none;
+    }
+    .exit-home-button:hover {
+      background: #217DBB; transform: scale(1.03);
+    }
+    .manipulation-buttons {
+      position: absolute; bottom: 20px; left: 20px;
+      display: none; flex-direction: column; gap: 10px;
+      z-index: 1001; transform: translateY(20px);
+    }
+    .manipulation-buttons button {
+      background: rgba(46,204,113,0.8); color: white;
+      padding: 12px 18px; border-radius: 8px;
+      font-size: 0.95em; font-weight: 600;
+      cursor: pointer; border: none;
+      display: flex; align-items: center; gap: 8px;
+      box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+    }
+    .manipulation-buttons button:hover {
+      background: #2ECC71; transform: translateY(-3px);
+    }
+    .audio-box {
+      position: absolute; bottom: 20px; right: 20px;
+      width: 90%; max-width: 340px; z-index: 1000;
+      display: none; border-radius: 12px; overflow: hidden;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.5);
+      animation: fadeIn 0.8s ease-out forwards;
+      opacity: 0; background: rgba(0,0,0,0.6); padding: 10px;
+    }
+    .audio-box audio {
+      width: 100%; margin-bottom: 8px;
+      border-radius: 6px; background: white;
+    }
+    .model-description-box {
+      position: absolute; top: 80px; left: 50%;
+      transform: translateX(-50%);
+      background: rgba(44,62,80,0.85); color: white;
+      padding: 15px 25px; border-radius: 12px;
+      font-size: 1em; text-align: center;
+      max-width: 90%; z-index: 1002; display: none;
+    }
+    .model-description-box h3 {
+      margin: 0 0 10px 0; font-size: 1.3em;
+      font-weight: 700; color: #2ECC71;
+    }
+    @keyframes fadeIn {
+      to { opacity: 1; transform: translate(0,0); }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="instruction-note" id="instructionNote">Arahkan kamera HP pada marker AR</div>
+  <button class="exit-home-button" onclick="exitToHome()"><i class="fas fa-home"></i> Keluar ke Beranda</button>
+
+  <div class="manipulation-buttons" id="manipulationButtons">
+    <button onclick="rotateModel('Y', 10)"><i class="fas fa-undo-alt"></i> Putar Kiri</button>
+    <button onclick="rotateModel('Y', -10)"><i class="fas fa-redo-alt"></i> Putar Kanan</button>
+    <button onclick="scaleModel(1.1)"><i class="fas fa-search-plus"></i> Perbesar</button>
+    <button onclick="scaleModel(0.9)"><i class="fas fa-search-minus"></i> Perkecil</button>
+    <button onclick="resetModel()"><i class="fas fa-sync-alt"></i> Reset</button>
+  </div>
+
+  <div class="model-description-box" id="modelDescriptionBox">
+    <h3 id="modelDescriptionTitle"></h3>
+    <p id="modelDescriptionContent"></p>
+  </div>
+
+  <a-scene embedded arjs>
+    <a-entity camera></a-entity>
+  </a-scene>
+
+  <script>
+   const markers = [
+  {
+    id: "marker1",
+    audioBox: "audio-benda1",
+    audioId: "aud-benda1-indo",
+    modelId: "model-benda1",
+    modelSrc: "aset/benda1.glb",
+    markerUrl: "marker/marker1.patt",
+    audioSrc: "audio/benda1_indo.mp3",
+    initialScale: "0.1 0.1 0.1",
+    descriptionTitle: "Kapak Penetak",
+    descriptionContent: "Alat ini dibuat dari batu basal yang dibuat dengan teknik pemangkasan untuk menghasilkan ketajaman. Kapak ini berfungsi sebagai alat penetak/memotong. Secara kronologis berasal dari masa berburu tingkat sederhana. Lokasi: Desa Sembiran, Kec. Tejakula, Kabupaten Buleleng"
+  },
+  {
+    id: "marker2",
+    audioBox: "audio-benda2",
+    audioId: "aud-benda2-indo",
+    modelId: "model-benda2",
+    modelSrc: "aset/benda2.glb",
+    markerUrl: "marker/marker2.patt",
+    audioSrc: "audio/benda2_indo.mp3",
+    initialScale: "0.1 0.1 0.1",
+    descriptionTitle: "Patung Sederhana",
+    descriptionContent: "Benda ini dari bahan batu padas yang dibuat dengan teknik pahat, berfungsi sebagai benda upacara. Secara kronologis berasal dari jaman Perundagian. Lokasi: Situs Tigawasa, Kec. Banjar, Kabupaten Buleleng"
+  },
+  {
+    id: "marker3",
+    audioBox: "audio-benda3",
+    audioId: "aud-benda3-indo",
+    modelId: "model-benda3",
+    modelSrc: "aset/benda3.glb",
+    markerUrl: "marker/marker3.patt",
+    audioSrc: "audio/benda3_indo.mp3",
+    initialScale: "0.1 0.1 0.1",
+    descriptionTitle: "Serpih / Serut",
+    descriptionContent: "Alat ini dibuat dari batu basal yang dibuat dengan teknik serpihan dari batu inti sehingga menghasilkan tajaman. Alat serpih ini berfungsi sebagai alat pemotong dan sebagai alat serut. Secara kronologis berasal dari masa berburu tingkat sederhana. Lokasi: Desa Sembiran, Kecamatan Tejakula, Kabupaten Buleleng"
+  },
+  {
+    id: "marker4",
+    audioBox: "audio-benda4",
+    audioId: "aud-benda4-indo",
+    modelId: "model-benda4",
+    modelSrc: "aset/benda4.glb",
+    markerUrl: "marker/marker4.patt",
+    audioSrc: "audio/benda4_indo.mp3",
+    initialScale: "0.1 0.1 0.1",
+    descriptionTitle: "Kapak Penimbas",
+    descriptionContent: "Alat ini dibuat dari batu basal yang dibuat dengan teknik pemangkasan untuk menghasilkan Bidang Pukul. Kapak ini berfungsi sebagai alat pemotong. Secara kronologis berasal dari masa berburu tingkat sederhana. Lokasi : Desa Sembiran, Kec. Tejakula, Kabupaten Buleleng"
+  },
+  {
+    id: "marker5",
+    audioBox: "audio-benda5",
+    audioId: "aud-benda5-indo",
+    modelId: "model-benda5",
+    modelSrc: "aset/benda5.glb",
+    markerUrl: "marker/marker5.patt",
+    audioSrc: "audio/benda5_indo.mp3",
+    initialScale: "0.1 0.1 0.1",
+    descriptionTitle: "Periuk",
+    descriptionContent: "Dibuat dari bahan tanah liat yang dibuat dengan teknik roda pemutar dan teknik tetap. Fungsinya sebagai perlengkapan rumah tangga. Secara kronologis berasal dari masa bercocok tanam. Lokasi: Kalang Anyar, Desa Banjar Asem, Kecamatan Seririt, Kabupaten Buleleng"
+  },
+  {
+    id: "marker6",
+    audioBox: "audio-benda6",
+    audioId: "aud-benda6-indo",
+    modelId: "model-benda6",
+    modelSrc: "aset/benda6.glb",
+    markerUrl: "marker/marker6.patt",
+    audioSrc: "audio/benda6_indo.mp3",
+    initialScale: "0.1 0.1 0.1",
+    descriptionTitle: "Proto Kapak Genggam",
+    descriptionContent: "Alat ini dibuat dari batu basal dengan teknik pemangkasan untuk menghasilkan bidang pukul. Berfungsi sebagai alat pemotong. Secara kronologis berasal dari masa berburu tingkat sederhana. Lokasi: Desa Sembiran, Kecamatan Tejakula, Kabupaten Buleleng"
+  },
+  {
+    id: "marker7",
+    audioBox: "audio-benda7",
+    audioId: "aud-benda7-indo",
+    modelId: "model-benda7",
+    modelSrc: "aset/benda7.glb",
+    markerUrl: "marker/marker7.patt",
+    audioSrc: "audio/benda7_indo.mp3",
+    initialScale: "0.1 0.1 0.1",
+    descriptionTitle: "Periuk",
+    descriptionContent: "Dibuat dari bahan tanah liat dengan teknik roda pemutar dan teknik tetap. Fungsinya sebagai alat rumah tangga. Secara kronologis berasal dari masa bercocok tanam. Lokasi: Kalang Anyar, Desa Banjar Asem, Kecamatan Seririt, Kabupaten Buleleng"
+  },
+  {
+    id: "marker8",
+    audioBox: "audio-benda8",
+    audioId: "aud-benda8-indo",
+    modelId: "model-benda8",
+    modelSrc: "aset/benda8.glb",
+    markerUrl: "marker/marker8.patt",
+    audioSrc: "audio/benda8_indo.mp3",
+    initialScale: "0.1 0.1 0.1",
+    descriptionTitle: "Beliung Persegi (Gigi Kilap)",
+    descriptionContent: "Alat ini dibuat dari bahan batu andesit dengan teknik diumpan halus. Fungsinya sebagai alat bercocok tanam. Secara kronologis berasal dari masa bercocok tanam. Lokasi: Desa Sukasada, Kecamatan Sukasada, Kabupaten Buleleng"
+  },
+  {
+    id: "marker9",
+    audioBox: "audio-benda9",
+    audioId: "aud-benda9-indo",
+    modelId: "model-benda9",
+    modelSrc: "aset/benda9.glb",
+    markerUrl: "marker/marker9.patt",
+    audioSrc: "audio/benda9_indo.mp3",
+    initialScale: "0.1 0.1 0.1",
+    descriptionTitle: "Pecahan Gerabah Ari Kemendu",
+    descriptionContent: "Alat ini dibuat dari tanah liat/batuan, yang dibuat dengan teknik roda pemutar dan dislip halus. Berfungsi sebagai perlengkapan rumah tangga dan peralatan upacara. Secara kronologis berasal dari masa awal Masehi. Lokasi: Desa Pacung, Kecamatan Tejakula, Kabupaten Buleleng"
+  },
+  {
+    id: "marker10",
+    audioBox: "audio-benda10",
+    audioId: "aud-benda10-indo",
+    modelId: "model-benda10",
+    modelSrc: "aset/benda10.glb",
+    markerUrl: "marker/marker10.patt",
+    audioSrc: "audio/benda10_indo.mp3",
+    initialScale: "0.1 0.1 0.1",
+    descriptionTitle: "Pahat Genggam",
+    descriptionContent: "Alat ini dari batu basal yang dibuat dengan teknik pemangkasan untuk menghasilkan bidang tajaman. Berfungsi sebagai alat pemahat. Secara kronologis berasal dari masa berburu tingkat sederhana. Lokasi: Desa Sembiran, Kecamatan Tejakula, Kabupaten Buleleng"
+  },
+    {
+    id: "marker11",
+    audioBox: "audio-benda11",
+    audioId: "aud-benda11-indo",
+    modelId: "model-benda11",
+    modelSrc: "aset/benda11.glb",
+    markerUrl: "marker/marker11.patt",
+    audioSrc: "audio/benda11_indo.mp3",
+    initialScale: "0.1 0.1 0.1",
+    descriptionTitle: "Penta Gona",
+    descriptionContent: "Benda ini dibuat dari logam perunggu dengan teknik cor dan tempa. Berfungsi sebagai benda upacara. Secara kronologis berasal dari jaman perundagian. Lokasi: Tigawasa, Kecamatan Banjar, Kabupaten Buleleng"
+  },
+  {
+    id: "marker12",
+    audioBox: "audio-benda12",
+    audioId: "aud-benda12-indo",
+    modelId: "model-benda12",
+    modelSrc: "aset/benda12.glb",
+    markerUrl: "marker/marker12.patt",
+    audioSrc: "audio/benda12_indo.mp3",
+    initialScale: "0.1 0.1 0.1",
+    descriptionTitle: "Gelang Perunggu",
+    descriptionContent: "Gelang ini dibuat dari bahan logam perunggu dengan teknik cor dan tempa. Fungsinya sebagai perhiasan dan alat upacara. Secara kronologis berasal dari jaman perundagian. Lokasi: Kalang Anyar, Desa Banjar Asem, Kecamatan Seririt, Kabupaten Buleleng"
+  },
+  {
+    id: "marker13",
+    audioBox: "audio-benda13",
+    audioId: "aud-benda13-indo",
+    modelId: "model-benda13",
+    modelSrc: "aset/benda13.glb",
+    markerUrl: "marker/marker13.patt",
+    audioSrc: "audio/benda13_indo.mp3",
+    initialScale: "0.1 0.1 0.1",
+    descriptionTitle: "Tonjok Perunggu",
+    descriptionContent: "Benda ini dibuat dari logam Perunggu dengan teknik cor dan tempa, berfungsi sebagai benda upacara dan alat pertanian. Secara kronologis berasal dari jaman Perundagian. Lokasi: Tigawasa, Kecamatan Banjar, Kabupaten Buleleng"
+  },
+  {
+    id: "marker14",
+    audioBox: "audio-benda14",
+    audioId: "aud-benda14-indo",
+    modelId: "model-benda14",
+    modelSrc: "aset/benda14.glb",
+    markerUrl: "marker/marker14.patt",
+    audioSrc: "audio/benda14_indo.mp3",
+    initialScale: "0.1 0.1 0.1",
+    descriptionTitle: "Nekara",
+    descriptionContent: "Benda ini dibuat dari logam Perunggu dengan teknik Acire Perdu (Cor) dan Tempa, berfungsi sebagai alat upacara. Secara kronologis berasal dari jaman Perundagian. Lokasi: Ularan, Kecamatan Seririt, Kabupaten Buleleng"
+  },
+  {
+    id: "marker15",
+    audioBox: "audio-benda15",
+    audioId: "aud-benda15-indo",
+    modelId: "model-benda15",
+    modelSrc: "aset/benda15.glb",
+    markerUrl: "marker/marker15.patt",
+    audioSrc: "audio/benda15_indo.mp3",
+    initialScale: "0.1 0.1 0.1",
+    descriptionTitle: "Tojok Perunggu",
+    descriptionContent: "Benda ini dibuat dari bahan logam perunggu dengan teknik cor dan tempa, berfungsi sebagai alat perlengkapan rumah tangga. Secara kronologis berasal dari jaman Perundagian. Lokasi: Kalang Anyar, Desa Banjar Asem, Kecamatan Seririt, Kabupaten Buleleng"
+  },
+  {
+    id: "marker16",
+    audioBox: "audio-benda16",
+    audioId: "aud-benda16-indo",
+    modelId: "model-benda16",
+    modelSrc: "aset/benda16.glb",
+    markerUrl: "marker/marker16.patt",
+    audioSrc: "audio/benda16_indo.mp3",
+    initialScale: "0.1 0.1 0.1",
+    descriptionTitle: "Tajak (Kapak Sepatu)",
+    descriptionContent: "Benda ini dibuat dari logam perunggu dengan teknik cor dan tempa, berfungsi sebagai alat pertanian. Secara kronologis berasal dari jaman Perundagian. Lokasi: Pemberian Penduduk"
+  },
+  {
+    id: "marker17",
+    audioBox: "audio-benda17",
+    audioId: "aud-benda17-indo",
+    modelId: "model-benda17",
+    modelSrc: "aset/benda17.glb",
+    markerUrl: "marker/marker17.patt",
+    audioSrc: "audio/benda17_indo.mp3",
+    initialScale: "0.1 0.1 0.1",
+    descriptionTitle: "Manik-manik",
+    descriptionContent: "Benda ini dibuat dari bahan Cornalin dengan teknik Gosok dan Bor. Berfungsi sebagai perhiasan dan upacara. Secara kronologis berasal dari jaman Perundagian. Lokasi: Tejakula, Kecamatan Tejakula, Kabupaten Buleleng"
+  },
+  {
+    id: "marker18",
+    audioBox: "audio-benda18",
+    audioId: "aud-benda18-indo",
+    modelId: "model-benda18",
+    modelSrc: "aset/benda18.glb",
+    markerUrl: "marker/marker18.patt",
+    audioSrc: "audio/benda18_indo.mp3",
+    initialScale: "0.1 0.1 0.1",
+    descriptionTitle: "Fragmen Spiral",
+    descriptionContent: "Benda ini dibuat dari bahan logam perunggu dengan teknik tempa. Berfungsi sebagai perhiasan kepala dan bekal kubur. Secara kronologis berasal dari jaman Perundagian. Lokasi: Kalang Anyar, Ds. Banjar Asem, Kecamatan Seririt, Kabupaten Buleleng"
+  },
+  {
+    id: "marker19",
+    audioBox: "audio-benda19",
+    audioId: "aud-benda19-indo",
+    modelId: "model-benda19",
+    modelSrc: "aset/benda19.glb",
+    markerUrl: "marker/marker19.patt",
+    audioSrc: "audio/benda19_indo.mp3",
+    initialScale: "0.1 0.1 0.1",
+    descriptionTitle: "Manik-manik",
+    descriptionContent: "Benda ini dibuat dari bahan Cornalin dan batu, dibuat dengan teknik Gosok dan Bor. Berfungsi sebagai perhiasan dan benda upacara. Lokasi: Kalang Anyar, Ds. Banjar Asem, Kecamatan Seririt, Kabupaten Buleleng"
+  },
+  {
+    id: "marker20",
+    audioBox: "audio-benda20",
+    audioId: "aud-benda20-indo",
+    modelId: "model-benda20",
+    modelSrc: "aset/benda20.glb",
+    markerUrl: "marker/marker20.patt",
+    audioSrc: "audio/benda20_indo.mp3",
+    initialScale: "0.1 0.1 0.1",
+    descriptionTitle: "Mata Uang",
+    descriptionContent: "Mata uang dibuat dari emas. Nilai nominalnya ditentukan berdasarkan berat, bentuk, dan hiasannya. Mata uang emas merupakan alat tukar resmi yang berasal dari masa Bali Kuno. Lokasi: Desa Umejero, Desa Munduk, Kecamatan Seririt, Kabupaten Buleleng"
+  },
+    {
+    id: "marker21",
+    audioBox: "audio-benda21",
+    audioId: "aud-benda21-indo",
+    modelId: "model-benda21",
+    modelSrc: "aset/benda21.glb",
+    markerUrl: "marker/marker21.patt",
+    audioSrc: "audio/benda21_indo.mp3",
+    initialScale: "0.1 0.1 0.1",
+    descriptionTitle: "Batu Pipisan",
+    descriptionContent: "Batu pipisan berkaki menyerupai meja kecil. Berfungsi untuk mengulek petulangan atau simbol orang dalam upacara sraddha. Lokasi: Pura Gede Poh Asem, Desa Mayong, Kec. Seririt, Kabupaten Buleleng"
+  },
+  {
+    id: "marker22",
+    audioBox: "audio-benda22",
+    audioId: "aud-benda22-indo",
+    modelId: "model-benda22",
+    modelSrc: "aset/benda22.glb",
+    markerUrl: "marker/marker22.patt",
+    audioSrc: "audio/benda22_indo.mp3",
+    initialScale: "0.1 0.1 0.1",
+    descriptionTitle: "Peripih Emas",
+    descriptionContent: "Peripih emas tipis dengan hiasan bunga Padma. Berfungsi sebagai pedagingan (jiwa atas) dalam bangunan suci. Lokasi: Desa Ume Jero, Desa Munduk, Kecamatan Seririt, Kabupaten Buleleng"
+  },
+  {
+    id: "marker23",
+    audioBox: "audio-benda23",
+    audioId: "aud-benda23-indo",
+    modelId: "model-benda23",
+    modelSrc: "aset/benda23.glb",
+    markerUrl: "marker/marker23.patt",
+    audioSrc: "audio/benda23_indo.mp3",
+    initialScale: "0.1 0.1 0.1",
+    descriptionTitle: "Wadah Kapur Sirih",
+    descriptionContent: "Wadah kapur sirih dari logam yang digunakan dalam tradisi mengunyah sirih. Lokasi: Situs Tejakula, Kecamatan Tejakula, Kabupaten Buleleng"
+  },
+  {
+    id: "marker24",
+    audioBox: "audio-benda24",
+    audioId: "aud-benda24-indo",
+    modelId: "model-benda24",
+    modelSrc: "aset/benda24.glb",
+    markerUrl: "marker/marker24.patt",
+    audioSrc: "audio/benda24_indo.mp3",
+    initialScale: "0.1 0.1 0.1",
+    descriptionTitle: "Batu Bata Pipisan",
+    descriptionContent: "Pipisan kecil yang dibuat dari batu bata. Diduga sebagai alat upacara. Lokasi: Situs Sembiran, Kecamatan Tejakula, Kabupaten Buleleng"
+  },
+  {
+    id: "marker25",
+    audioBox: "audio-benda25",
+    audioId: "aud-benda25-indo",
+    modelId: "model-benda25",
+    modelSrc: "aset/benda25.glb",
+    markerUrl: "marker/marker25.patt",
+    audioSrc: "audio/benda25_indo.mp3",
+    initialScale: "0.1 0.1 0.1",
+    descriptionTitle: "Jepitan Besi",
+    descriptionContent: "Alat penting dalam teknologi buat logam, digunakan untuk mengambil logam panas dari tungku. Lokasi: Tamblingan, Desa Munduk, Kecamatan Banjar, Kabupaten Buleleng"
+  },
+  {
+    id: "marker26",
+    audioBox: "audio-benda26",
+    audioId: "aud-benda26-indo",
+    modelId: "model-benda26",
+    modelSrc: "aset/benda26.glb",
+    markerUrl: "marker/marker26.patt",
+    audioSrc: "audio/benda26_indo.mp3",
+    initialScale: "0.1 0.1 0.1",
+    descriptionTitle: "Gacuk",
+    descriptionContent: "Gacuk dari batu dan gerabah merupakan alat permainan anak-anak. Lokasi: Desa Sembiran, Kecamatan Tejakula, Kabupaten Buleleng"
+  },
+  {
+    id: "marker27",
+    audioBox: "audio-benda27",
+    audioId: "aud-benda27-indo",
+    modelId: "model-benda27",
+    modelSrc: "aset/benda27.glb",
+    markerUrl: "marker/marker27.patt",
+    audioSrc: "audio/benda27_indo.mp3",
+    initialScale: "0.1 0.1 0.1",
+    descriptionTitle: "Fragmen Besi",
+    descriptionContent: "Fragmen besi merupakan limbah dan hasil produksi dari teknologi penempaan logam. Lokasi: Situs Tamblingan, Desa Munduk, Kecamatan Banjar, Kabupaten Buleleng"
+  },
+  {
+    id: "marker28",
+    audioBox: "audio-benda28",
+    audioId: "aud-benda28-indo",
+    modelId: "model-benda28",
+    modelSrc: "aset/benda28.glb",
+    markerUrl: "marker/marker28.patt",
+    audioSrc: "audio/benda28_indo.mp3",
+    initialScale: "0.1 0.1 0.1",
+    descriptionTitle: "Fragmen Gerabah dengan Lelehan Logam",
+    descriptionContent: "Merupakan bagian dari wadah peleburan logam (Koi). Logam dipanaskan dan dituangkan ke dalam cetakan. Lokasi: Situs Tamblingan, Desa Munduk, Kecamatan Banjar, Kabupaten Buleleng"
+  },
+  {
+    id: "marker29",
+    audioBox: "audio-benda29",
+    audioId: "aud-benda29-indo",
+    modelId: "model-benda29",
+    modelSrc: "aset/benda29.glb",
+    markerUrl: "marker/marker29.patt",
+    audioSrc: "audio/benda29_indo.mp3",
+    initialScale: "0.1 0.1 0.1",
+    descriptionTitle: "Fragmen Perunggu",
+    descriptionContent: "Campuran tembaga dan timah. Fragmen ini merupakan produk dan limbah dari teknologi buat logam. Lokasi: Situs Tamblingan, Desa Munduk, Kecamatan Banjar, Kabupaten Buleleng"
+  },
+  {
+    id: "marker30",
+    audioBox: "audio-benda30",
+    audioId: "aud-benda30-indo",
+    modelId: "model-benda30",
+    modelSrc: "aset/benda30.glb",
+    markerUrl: "marker/marker30.patt",
+    audioSrc: "audio/benda30_indo.mp3",
+    initialScale: "0.1 0.1 0.1",
+    descriptionTitle: "Tablet",
+    descriptionContent: "Tablet tanah liat berisi mantra Budhist dalam aksara Dewi Nagari dan bahasa Sanskerta, berasal dari abad VIII–IX. Lokasi: Situs Kalibukbuk, Kecamatan Buleleng, Kabupaten Buleleng"
+  },
+    {
+    id: "marker31",
+    audioBox: "audio-benda31",
+    audioId: "aud-benda31-indo",
+    modelId: "model-benda31",
+    modelSrc: "aset/benda31.glb",
+    markerUrl: "marker/marker31.patt",
+    audioSrc: "audio/benda31_indo.mp3",
+    initialScale: "0.1 0.1 0.1",
+    descriptionTitle: "Stupika",
+    descriptionContent: "Replika dari stupa tanah liat. Di dalamnya terdapat tablet tanah liat dan kadang relief Budha. Berfungsi sebagai sarana pemujaan dalam agama Budha. Lokasi: Situs Kalibukbuk, Kecamatan Buleleng, Kabupaten Buleleng"
+  },
+  {
+    id: "marker32",
+    audioBox: "audio-benda32",
+    audioId: "aud-benda32-indo",
+    modelId: "model-benda32",
+    modelSrc: "aset/benda32.glb",
+    markerUrl: "marker/marker32.patt",
+    audioSrc: "audio/benda32_indo.mp3",
+    initialScale: "0.1 0.1 0.1",
+    descriptionTitle: "Batu Bata Berhias Gajah",
+    descriptionContent: "Fragmen relief kepala gajah yang merupakan bagian dari bangunan candi atau stupa, berfungsi sebagai hiasan candi. Lokasi: Situs Kalibukbuk, Kecamatan Buleleng, Kabupaten Buleleng"
+  },
+  {
+    id: "marker33",
+    audioBox: "audio-benda33",
+    audioId: "aud-benda33-indo",
+    modelId: "model-benda33",
+    modelSrc: "aset/benda33.glb",
+    markerUrl: "marker/marker33.patt",
+    audioSrc: "audio/benda33_indo.mp3",
+    initialScale: "0.1 0.1 0.1",
+    descriptionTitle: "Keramik",
+    descriptionContent: "Dibuat dari bahan kaolin dan batuan, diglasir di bagian luar dan dalam. Beraneka bentuk, berfungsi sebagai alat rumah tangga. Lokasi: Tidak disebutkan secara spesifik"
+  },
+  {
+    id: "marker34",
+    audioBox: "audio-benda34",
+    audioId: "aud-benda34-indo",
+    modelId: "model-benda34",
+    modelSrc: "aset/benda34.glb",
+    markerUrl: "marker/marker34.patt",
+    audioSrc: "audio/benda34_indo.mp3",
+    initialScale: "0.1 0.1 0.1",
+    descriptionTitle: "Placeholder Benda 34",
+    descriptionContent: "gdsfsdfds."
+  }
+  
+];
+
+
+    const scene = document.querySelector('a-scene');
+    const manipulationButtons = document.getElementById('manipulationButtons');
+    const instructionNote = document.getElementById('instructionNote');
+    const modelDescriptionBox = document.getElementById('modelDescriptionBox');
+    const modelDescriptionTitle = document.getElementById('modelDescriptionTitle');
+    const modelDescriptionContent = document.getElementById('modelDescriptionContent');
+    let activeModel = null;
+
+    function hideAllAudio() {
+      markers.forEach(({ audioBox, audioId }) => {
+        const box = document.getElementById(audioBox);
+        const audio = document.getElementById(audioId);
+        if (box) box.style.display = 'none';
+        if (audio) { audio.pause(); audio.currentTime = 0; }
+      });
+    }
+
+    function showManipulationButtons() {
+      manipulationButtons.style.display = 'flex';
+      manipulationButtons.style.animation = 'fadeIn 0.8s ease-out forwards';
+    }
+
+    function hideManipulationButtons() {
+      manipulationButtons.style.display = 'none';
+      manipulationButtons.style.opacity = 0;
+    }
+
+    function showModelDescription(title, content) {
+      modelDescriptionTitle.textContent = title;
+      modelDescriptionContent.textContent = content;
+      modelDescriptionBox.style.display = 'block';
+    }
+
+    function hideModelDescription() {
+      modelDescriptionBox.style.display = 'none';
+      modelDescriptionBox.style.opacity = 0;
+    }
+
+    function rotateModel(axis, angle) {
+      if (activeModel) {
+        let rot = activeModel.getAttribute('rotation') || { x: 0, y: 0, z: 0 };
+        if (axis === 'X') rot.x += angle;
+        if (axis === 'Y') rot.y += angle;
+        if (axis === 'Z') rot.z += angle;
+        activeModel.setAttribute('rotation', rot);
+      }
+    }
+
+    function scaleModel(factor) {
+      if (activeModel) {
+        let scale = activeModel.getAttribute('scale');
+        let parts = typeof scale === 'string' ? scale.split(' ').map(parseFloat) : [scale.x, scale.y, scale.z];
+        let newScale = parts.map(s => Math.min(5, Math.max(0.01, s * factor)));
+        activeModel.setAttribute('scale', newScale.join(' '));
+      }
+    }
+
+    function resetModel() {
+      if (activeModel) {
+        const data = markers.find(m => m.modelId === activeModel.id);
+        activeModel.setAttribute('position', '0 0 0');
+        activeModel.setAttribute('rotation', '0 0 0');
+        activeModel.setAttribute('scale', data.initialScale);
+      }
+    }
+
+    function exitToHome() {
+      window.location.href = 'index.html';
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      instructionNote.style.animationDelay = '0.5s';
+      instructionNote.style.animation = 'fadeIn 0.8s ease-out forwards';
+      document.querySelector('.exit-home-button').style.animationDelay = '0.7s';
+      document.querySelector('.exit-home-button').style.animation = 'fadeIn 0.8s ease-out forwards';
+
+      // Generate dynamic elements
+      markers.forEach(data => {
+        // Marker and Model
+        const marker = document.createElement('a-marker');
+        marker.setAttribute('id', data.id);
+        marker.setAttribute('type', 'pattern');
+        marker.setAttribute('url', data.markerUrl);
+
+        const model = document.createElement('a-entity');
+        model.setAttribute('id', data.modelId);
+        model.setAttribute('gltf-model', data.modelSrc);
+        model.setAttribute('scale', data.initialScale);
+        model.setAttribute('position', '0 0 0');
+        marker.appendChild(model);
+        scene.appendChild(marker);
+
+        // Audio Box
+        const audioBox = document.createElement('div');
+        audioBox.setAttribute('id', data.audioBox);
+        audioBox.className = 'audio-box';
+
+        const audio = document.createElement('audio');
+        audio.setAttribute('id', data.audioId);
+        audio.setAttribute('src', data.audioSrc);
+        audio.setAttribute('controls', true);
+        audioBox.appendChild(audio);
+        document.body.appendChild(audioBox);
+
+        // Event
+        marker.addEventListener('markerFound', () => {
+          hideAllAudio();
+          audioBox.style.display = 'block';
+          if (audio) {
+            audio.currentTime = 0;
+            audio.play();
+          }
+          activeModel = model;
+          showManipulationButtons();
+          showModelDescription(data.descriptionTitle, data.descriptionContent);
+        });
+
+        marker.addEventListener('markerLost', () => {
+          if (audio) {
+            audio.pause();
+            audio.currentTime = 0;
+          }
+          audioBox.style.display = 'none';
+          activeModel = null;
+          hideManipulationButtons();
+          hideModelDescription();
+        });
+      });
+    });
+  </script>
+</body>
+</html>

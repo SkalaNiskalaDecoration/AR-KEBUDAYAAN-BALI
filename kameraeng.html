@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AR Camera with English & Indonesian Audio</title>
+
+  <!-- A-Frame & AR.js -->
+  <script src="https://aframe.io/releases/1.2.0/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js/aframe/build/aframe-ar.min.js"></script>
+
+  <!-- Fonts and Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      font-family: 'Poppins', sans-serif;
+      background-color: #000;
+    }
+    a-scene {
+      position: absolute; top: 0; left: 0; z-index: 0;
+    }
+    .instruction-note, .exit-home-button, .manipulation-buttons, .model-description-box {
+      animation: fadeIn 0.8s ease-out forwards;
+      opacity: 0;
+    }
+    .instruction-note {
+      position: absolute; top: 20px; right: 20px;
+      background: rgba(0,0,0,0.6); color: white;
+      padding: 12px 18px; border-radius: 10px;
+      font-size: 1.1em; font-weight: 600;
+      z-index: 1001; text-align: right;
+      backdrop-filter: blur(5px);
+      box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+      transform: translateX(20px);
+    }
+    .exit-home-button {
+      position: absolute; top: 20px; left: 20px;
+      background: #3498DB; color: white;
+      padding: 12px 20px; border-radius: 10px;
+      font-size: 1em; font-weight: 600;
+      cursor: pointer; z-index: 1001;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+      transform: translateX(-20px); border: none;
+    }
+    .exit-home-button:hover {
+      background: #217DBB; transform: scale(1.03);
+    }
+    .manipulation-buttons {
+      position: absolute; bottom: 20px; left: 20px;
+      display: none; flex-direction: column; gap: 10px;
+      z-index: 1001; transform: translateY(20px);
+    }
+    .manipulation-buttons button {
+      background: rgba(46,204,113,0.8); color: white;
+      padding: 12px 18px; border-radius: 8px;
+      font-size: 0.95em; font-weight: 600;
+      cursor: pointer; border: none;
+      display: flex; align-items: center; gap: 8px;
+      box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+    }
+    .manipulation-buttons button:hover {
+      background: #2ECC71; transform: translateY(-3px);
+    }
+    .audio-box {
+      position: absolute; bottom: 20px; right: 20px;
+      width: 90%; max-width: 340px; z-index: 1000;
+      display: none; border-radius: 12px; overflow: hidden;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.5);
+      animation: fadeIn 0.8s ease-out forwards;
+      opacity: 0; background: rgba(0,0,0,0.6); padding: 10px;
+    }
+    .audio-box audio {
+      width: 100%; margin-bottom: 8px;
+      border-radius: 6px; background: white;
+    }
+    .model-description-box {
+      position: absolute; top: 80px; left: 50%;
+      transform: translateX(-50%);
+      background: rgba(44,62,80,0.85); color: white;
+      padding: 15px 25px; border-radius: 12px;
+      font-size: 1em; text-align: center;
+      max-width: 90%; z-index: 1002; display: none;
+    }
+    .model-description-box h3 {
+      margin: 0 0 10px 0; font-size: 1.3em;
+      font-weight: 700; color: #2ECC71;
+    }
+    @keyframes fadeIn {
+      to { opacity: 1; transform: translate(0,0); }
+    }
+  </style>
+</head>
+<body>
+  <div class="instruction-note" id="instructionNote">Point your camera at the AR marker</div>
+  <button class="exit-home-button" onclick="exitToHome()"><i class="fas fa-home"></i> Back to Home</button>
+  <div class="manipulation-buttons" id="manipulationButtons">
+    <button onclick="rotateModel('Y', 10)"><i class="fas fa-undo-alt"></i> Rotate Left</button>
+    <button onclick="rotateModel('Y', -10)"><i class="fas fa-redo-alt"></i> Rotate Right</button>
+    <button onclick="scaleModel(1.1)"><i class="fas fa-search-plus"></i> Zoom In</button>
+    <button onclick="scaleModel(0.9)"><i class="fas fa-search-minus"></i> Zoom Out</button>
+    <button onclick="resetModel()"><i class="fas fa-sync-alt"></i> Reset</button>
+  </div>
+  <div class="model-description-box" id="modelDescriptionBox">
+    <h3 id="modelDescriptionTitle"></h3>
+    <p id="modelDescriptionContent"></p>
+  </div>
+  <a-scene embedded arjs>
+    <a-entity camera></a-entity>
+  </a-scene>
+
+  <script>
+    const markers = Array.from({ length: 37 }, (_, i) => {
+      const index = i + 1;
+      return {
+        id: `marker${index}`,
+        audioBox: `audio-benda${index}`,
+        audioIds: [`aud-benda${index}-indo`, `aud-benda${index}-eng`],
+        modelId: `model-benda${index}`,
+        modelSrc: `aset/benda${index}.glb`,
+        markerUrl: `marker/marker${index}.patt`,
+        audioSrcIndo: `audio/benda${index}_indo.mp3`,
+        audioSrcEng: `audioeng/benda${index}_eng.mp3`,
+        initialScale: '0.1 0.1 0.1',
+        descriptionTitle: `Object ${index}`,
+        descriptionContent: `This is object number ${index} with historical or cultural significance.`
+      };
+    });
+
+    const scene = document.querySelector('a-scene');
+    const manipulationButtons = document.getElementById('manipulationButtons');
+    const instructionNote = document.getElementById('instructionNote');
+    const modelDescriptionBox = document.getElementById('modelDescriptionBox');
+    const modelDescriptionTitle = document.getElementById('modelDescriptionTitle');
+    const modelDescriptionContent = document.getElementById('modelDescriptionContent');
+    let activeModel = null;
+
+    function hideAllAudio() {
+      markers.forEach(({ audioBox, audioIds }) => {
+        const box = document.getElementById(audioBox);
+        if (box) box.style.display = 'none';
+        audioIds.forEach(id => {
+          const audio = document.getElementById(id);
+          if (audio) {
+            audio.pause();
+            audio.currentTime = 0;
+          }
+        });
+      });
+    }
+
+    function showManipulationButtons() {
+      manipulationButtons.style.display = 'flex';
+      manipulationButtons.style.animation = 'fadeIn 0.8s ease-out forwards';
+    }
+
+    function hideManipulationButtons() {
+      manipulationButtons.style.display = 'none';
+      manipulationButtons.style.opacity = 0;
+    }
+
+    function showModelDescription(title, content) {
+      modelDescriptionTitle.textContent = title;
+      modelDescriptionContent.textContent = content;
+      modelDescriptionBox.style.display = 'block';
+    }
+
+    function hideModelDescription() {
+      modelDescriptionBox.style.display = 'none';
+      modelDescriptionBox.style.opacity = 0;
+    }
+
+    function rotateModel(axis, angle) {
+      if (activeModel) {
+        let rot = activeModel.getAttribute('rotation') || { x: 0, y: 0, z: 0 };
+        if (axis === 'X') rot.x += angle;
+        if (axis === 'Y') rot.y += angle;
+        if (axis === 'Z') rot.z += angle;
+        activeModel.setAttribute('rotation', rot);
+      }
+    }
+
+    function scaleModel(factor) {
+      if (activeModel) {
+        let scale = activeModel.getAttribute('scale');
+        let parts = typeof scale === 'string' ? scale.split(' ').map(parseFloat) : [scale.x, scale.y, scale.z];
+        let newScale = parts.map(s => Math.min(5, Math.max(0.01, s * factor)));
+        activeModel.setAttribute('scale', newScale.join(' '));
+      }
+    }
+
+    function resetModel() {
+      if (activeModel) {
+        const data = markers.find(m => m.modelId === activeModel.id);
+        activeModel.setAttribute('position', '0 0 0');
+        activeModel.setAttribute('rotation', '0 0 0');
+        activeModel.setAttribute('scale', data.initialScale);
+      }
+    }
+
+    function exitToHome() {
+      window.location.href = 'index.html';
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      instructionNote.style.animationDelay = '0.5s';
+      instructionNote.style.animation = 'fadeIn 0.8s ease-out forwards';
+      document.querySelector('.exit-home-button').style.animationDelay = '0.7s';
+      document.querySelector('.exit-home-button').style.animation = 'fadeIn 0.8s ease-out forwards';
+
+      markers.forEach(data => {
+        const marker = document.createElement('a-marker');
+        marker.setAttribute('id', data.id);
+        marker.setAttribute('type', 'pattern');
+        marker.setAttribute('url', data.markerUrl);
+
+        const model = document.createElement('a-entity');
+        model.setAttribute('id', data.modelId);
+        model.setAttribute('gltf-model', data.modelSrc);
+        model.setAttribute('scale', data.initialScale);
+        model.setAttribute('position', '0 0 0');
+        marker.appendChild(model);
+        scene.appendChild(marker);
+
+        const audioBox = document.createElement('div');
+        audioBox.setAttribute('id', data.audioBox);
+        audioBox.className = 'audio-box';
+
+        const audioIndo = document.createElement('audio');
+        audioIndo.setAttribute('id', data.audioIds[0]);
+        audioIndo.setAttribute('src', data.audioSrcIndo);
+        audioIndo.setAttribute('controls', true);
+        audioBox.appendChild(audioIndo);
+
+        const audioEng = document.createElement('audio');
+        audioEng.setAttribute('id', data.audioIds[1]);
+        audioEng.setAttribute('src', data.audioSrcEng);
+        audioEng.setAttribute('controls', true);
+        audioBox.appendChild(audioEng);
+
+        document.body.appendChild(audioBox);
+
+        marker.addEventListener('markerFound', () => {
+          hideAllAudio();
+          audioBox.style.display = 'block';
+          activeModel = model;
+          showManipulationButtons();
+          showModelDescription(data.descriptionTitle, data.descriptionContent);
+        });
+
+        marker.addEventListener('markerLost', () => {
+          data.audioIds.forEach(id => {
+            const audio = document.getElementById(id);
+            if (audio) {
+              audio.pause();
+              audio.currentTime = 0;
+            }
+          });
+          audioBox.style.display = 'none';
+          activeModel = null;
+          hideManipulationButtons();
+          hideModelDescription();
+        });
+      });
+    });
+  </script>
+</body>
+</html>
